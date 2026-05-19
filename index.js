@@ -1,3 +1,7 @@
+const dns = require('node:dns'); 
+dns.setServers(["8.8.8.8", "8.8.4.4"]);
+//---------------------------------------
+
 const express = require('express');
 const cors = require('cors');
 const dotenv = require('dotenv');
@@ -13,10 +17,59 @@ app.use(cors());
 app.use(express.json()); // Parses incoming JSON requests
 
 
+const { MongoClient, ServerApiVersion } = require('mongodb');
+const uri = process.env.MONGODB_URI;
+
+// Create a MongoClient with a MongoClientOptions object to set the Stable API version
+const client = new MongoClient(uri, {
+  serverApi: {
+    version: ServerApiVersion.v1,
+    strict: true,
+    deprecationErrors: true,
+  }
+});
+
+async function run() {
+  try {
+    // Connect the client to the server	(optional starting in v4.7)
+    await client.connect();
+    const db = client.db("doc-appoint-project-db");
+
+    // testing the dtaabase connection and insertion
+    const testCollection = db.collection("test");
+
+    // A sample POST route to test data insertion into the test collection
+    app.post('/api/test-insert', async (req, res) => {
+  try {
+    const testData = req.body;
+    
+    // Check if the collection reference is perfectly accessible
+    const result = await testCollection.insertOne(testData);
+    
+    console.log("✅ Successfully inserted to DB:", result);
+    res.status(201).json({ success: true, message: "Data inserted successfully!", result });
+  } catch (error) {
+    // 🎯 This will print the actual hidden error in your VS Code terminal
+    console.error("❌ ACTUAL DATABASE ERROR:", error); 
+    res.status(500).json({ success: false, message: "Insertion failed", error: error.message });
+  }
+});
+
+    // Send a ping to confirm a successful connection
+    await client.db("admin").command({ ping: 1 });
+    console.log("Pinged your deployment. You successfully connected to MongoDB!");
+  } finally {
+    // Ensures that the client will close when you finish/error
+    // await client.close();
+  }
+}
+run().catch(console.dir);
+
+
 
 // Root route to verify server status
 app.get('/', (req, res) => {
-  res.send('Wanderlust Server is Running Smoothly (Without DB)!');
+  res.send('Server is Running Smoothly!');
 });
 
 // Start the Express server

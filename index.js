@@ -37,23 +37,45 @@ async function run() {
 
     // testing the dtaabase connection and insertion
     const testCollection = db.collection("test");
+    const appointmentsCollection = db.collection("appointments");
+
+    app.post('/api/bookings', async (req, res) => {
+  try {
+        const bookingData = req.body;
+        const result = await appointmentsCollection.insertOne(bookingData);
+        
+        console.log("New Appointment Saved to MongoDB:", result);
+        res.status(201).json({ 
+        success: true, 
+        message: "Appointment booked successfully!", 
+        result 
+        });
+    } catch (error) {
+        console.error("MongoDB Insertion Error:", error);
+        res.status(500).json({ 
+        success: false, 
+        message: "Failed to book appointment", 
+        error: error.message 
+        });
+    }
+  });
 
     // A sample POST route to test data insertion into the test collection
-    app.post('/api/test-insert', async (req, res) => {
-  try {
-    const testData = req.body;
-    
-    // Check if the collection reference is perfectly accessible
-    const result = await testCollection.insertOne(testData);
-    
-    console.log("✅ Successfully inserted to DB:", result);
-    res.status(201).json({ success: true, message: "Data inserted successfully!", result });
-  } catch (error) {
-    // 🎯 This will print the actual hidden error in your VS Code terminal
-    console.error("❌ ACTUAL DATABASE ERROR:", error); 
-    res.status(500).json({ success: false, message: "Insertion failed", error: error.message });
-  }
-});
+    // app.post('/api/test-insert', async (req, res) => {
+    // try {
+    //     const testData = req.body;
+        
+    //     // Check if the collection reference is perfectly accessible
+    //     const result = await testCollection.insertOne(testData);
+        
+    //     console.log("Successfully inserted to DB:", result);
+    //     res.status(201).json({ success: true, message: "Data inserted successfully!", result });
+    // } catch (error) {
+    //     // This will print the actual hidden error in your VS Code terminal
+    //     console.error("ACTUAL DATABASE ERROR:", error); 
+    //     res.status(500).json({ success: false, message: "Insertion failed", error: error.message });
+    // }
+    // });
 
     // Send a ping to confirm a successful connection
     await client.db("admin").command({ ping: 1 });

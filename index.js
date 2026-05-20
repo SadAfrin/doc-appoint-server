@@ -144,7 +144,51 @@ async function run() {
         }
         });
 
-        
+        // Post API: Only triggers if the email matches the hardcoded admin address
+        app.post("/api/doctors/add", async (req, res) => {
+        try {
+            const { adminEmail, doctorData } = req.body;
+
+            // Strict security check for admin email restriction
+            if (adminEmail !== process.env.ADMIN_EMAIL) {
+            return res.status(403).json({ success: false, message: "Unauthorized access" });
+            }
+
+            // Insert into 'doctors' collection
+            const result = await db.collection("doctors").insertOne({
+            name: doctorData.name,
+            specialty: doctorData.specialty,
+            image: doctorData.image,
+            experience: doctorData.experience,
+            availability: doctorData.availability, // Expecting an array of slots
+            description: doctorData.description,
+            hospital: doctorData.hospital,
+            location: doctorData.location,
+            fee: Number(doctorData.fee)
+            });
+
+            res.status(201).json({ success: true, data: result });
+        } catch (err) {
+            res.status(500).json({ success: false, error: err.message });
+        }
+        });
+
+        // Get API: To fetch all dynamically added doctors for All Appointments page
+        app.get("/api/doctors", async (req, res) => {
+        try {
+            const { search } = req.query;
+            let query = {};
+
+            if (search) {
+            query = { name: { $regex: search, $options: "i" } };
+            }
+
+            const doctors = await db.collection("doctors").find(query).toArray();
+            res.status(200).json({ success: true, data: doctors });
+        } catch (err) {
+            res.status(500).json({ success: false, error: err.message });
+        }
+        });
         
 
         // A sample POST route to test data insertion into the test collection

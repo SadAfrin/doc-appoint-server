@@ -118,7 +118,7 @@ async function run() {
         }
         });
 
-
+        // -------------------------------------------------------------------------------
         const usersCollection = db.collection("user"); // Better-Auth users collection
 
         app.patch('/api/users/update-profile', async (req, res) => {
@@ -186,6 +186,31 @@ async function run() {
             const doctors = await db.collection("doctors").find(query).toArray();
             res.status(200).json({ success: true, data: doctors });
         } catch (err) {
+            res.status(500).json({ success: false, error: err.message });
+        }
+        });
+
+
+        // Get API: To fetch a single doctor's complete profile dataset by MongoDB ObjectId
+        app.get("/api/doctors/:id", async (req, res) => {
+        try {
+            const { id } = req.params;
+            const { ObjectId } = require('mongodb'); // Ensure ObjectId is available
+
+            // Input validation flag guard
+            if (!ObjectId.isValid(id)) {
+            return res.status(400).json({ success: false, message: "Invalid Doctor ID format" });
+            }
+
+            const doctor = await db.collection("doctors").findOne({ _id: new ObjectId(id) });
+
+            if (doctor) {
+            res.status(200).json({ success: true, data: doctor });
+            } else {
+            res.status(404).json({ success: false, message: "Doctor profile not found" });
+            }
+        } catch (err) {
+            console.error("Single Doctor Fetch Error:", err);
             res.status(500).json({ success: false, error: err.message });
         }
         });

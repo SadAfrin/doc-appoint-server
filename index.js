@@ -60,26 +60,23 @@ async function run() {
             }
         });
 
-    
-        app.delete('/api/bookings/:id', async (req, res) => {
+        app.get('/api/bookings', async (req, res) => {
         try {
-            const { id } = req.params;
-            const { ObjectId } = require('mongodb'); // ObjectId import
-            
-            const result = await appointmentsCollection.deleteOne({ _id: new ObjectId(id) });
-            
-            if (result.deletedCount === 1) {
-            res.status(200).json({ success: true, message: "Appointment deleted successfully!" });
-            } else {
-            res.status(404).json({ success: false, message: "Appointment not found" });
+            const { email } = req.query; // email fetching 
+
+            let query = {};
+            if (email) {
+            query = { userEmail: email }; // email diye only shei dataset collect kora
             }
+
+            const result = await appointmentsCollection.find(query).toArray();
+            res.status(200).json({ success: true, result });
         } catch (error) {
             res.status(500).json({ success: false, error: error.message });
         }
         });
 
-        
-        app.put('/api/bookings/:id', async (req, res) => {
+        app.patch('/api/bookings/:id', async (req, res) => {
         try {
             const { id } = req.params;
             const { ObjectId } = require('mongodb');
@@ -102,6 +99,27 @@ async function run() {
             res.status(500).json({ success: false, error: error.message });
         }
         });
+
+    
+        app.delete('/api/bookings/:id', async (req, res) => {
+        try {
+            const { id } = req.params;
+            const { ObjectId } = require('mongodb'); // ObjectId import
+            
+            const result = await appointmentsCollection.deleteOne({ _id: new ObjectId(id) });
+            
+            if (result.deletedCount === 1) {
+            res.status(200).json({ success: true, message: "Appointment deleted successfully!" });
+            } else {
+            res.status(404).json({ success: false, message: "Appointment not found" });
+            }
+        } catch (error) {
+            res.status(500).json({ success: false, error: error.message });
+        }
+        });
+
+        
+        
 
         // A sample POST route to test data insertion into the test collection
         // app.post('/api/test-insert', async (req, res) => {

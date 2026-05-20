@@ -118,6 +118,32 @@ async function run() {
         }
         });
 
+
+        const usersCollection = db.collection("user"); // Better-Auth users collection
+
+        app.patch('/api/users/update-profile', async (req, res) => {
+        try {
+            const { email, name, image } = req.body;
+
+            if (!email) {
+            return res.status(400).json({ success: false, message: "Email is required" });
+            }
+
+            const query = { email: email };
+            const updateDoc = {
+            $set: {
+                name: name,
+                image: image
+            }
+            };
+
+            const result = await usersCollection.updateOne(query, updateDoc);
+            res.status(200).json({ success: true, message: "Profile updated successfully!", result });
+        } catch (error) {
+            res.status(500).json({ success: false, error: error.message });
+        }
+        });
+
         
         
 

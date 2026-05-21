@@ -32,7 +32,7 @@ const client = new MongoClient(uri, {
 async function run() {
     try {
         // Connect the client to the server	(optional starting in v4.7)
-        await client.connect();
+        // await client.connect();
         const db = client.db("doc-appoint-project-db");
 
         // testing the dtaabase connection and insertion
@@ -191,6 +191,11 @@ async function run() {
         });
 
 
+
+
+
+
+
         // Get API: To fetch a single doctor's complete profile dataset by MongoDB ObjectId
         app.get("/api/doctors/:id", async (req, res) => {
         try {
@@ -214,27 +219,33 @@ async function run() {
             res.status(500).json({ success: false, error: err.message });
         }
         });
+
+
+        // -----------------------------------------------
+        // update korar proyojon hoyechilo
+        app.patch("/api/doctors/:id", async (req, res) => {
+            try {
+                const { id } = req.params;
+                const { ObjectId } = require('mongodb');
+                
+                // 
+                const result = await db.collection("doctors").updateOne(
+                    { _id: new ObjectId(id) },
+                    { $set: { experience: req.body.experience } }
+                );
+
+                res.status(200).json({ success: true, message: "Experience updated", result });
+            } catch (err) {
+                res.status(500).json({ success: false, error: err.message });
+            }
+        });
+        // ------------------------------------------------
         
 
-        // A sample POST route to test data insertion into the test collection
-        // app.post('/api/test-insert', async (req, res) => {
-        // try {
-        //     const testData = req.body;
-            
-        //     // Check if the collection reference is perfectly accessible
-        //     const result = await testCollection.insertOne(testData);
-            
-        //     console.log("Successfully inserted to DB:", result);
-        //     res.status(201).json({ success: true, message: "Data inserted successfully!", result });
-        // } catch (error) {
-        //     // This will print the actual hidden error in your VS Code terminal
-        //     console.error("ACTUAL DATABASE ERROR:", error); 
-        //     res.status(500).json({ success: false, message: "Insertion failed", error: error.message });
-        // }
-        // });
+
 
         // Send a ping to confirm a successful connection
-        await client.db("admin").command({ ping: 1 });
+        // await client.db("admin").command({ ping: 1 });
         console.log("Pinged your deployment. You successfully connected to MongoDB!");
     } finally {
         // Ensures that the client will close when you finish/error

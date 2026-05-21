@@ -1,26 +1,48 @@
 const dns = require('node:dns'); 
 dns.setServers(["8.8.8.8", "8.8.4.4"]);
-//---------------------------------------
+// --------------------------------------------------------------------
 
 const express = require('express');
 const cors = require('cors');
 const dotenv = require('dotenv');
-
-// Load environment variables
+// MODIFICATION: jose-cjs import
+const { createRemoteJWKSet, jwtVerify } = require('jose-cjs');
+// -----------------------------------------------------------------------
 dotenv.config();
 
 const app = express();
-const PORT = process.env.PORT || 5000;
+const PORT = process.env.PORT;
 
-// Middleware configuration
-app.use(cors());
-app.use(express.json()); // Parses incoming JSON requests
+// CORS Configuration
+app.use(cors({ origin: `${process.env.CLIENT_URL}`, credentials: true }));
+app.use(express.json());
 
+// ---------------- JWT Middleware ----------------
+const authenticateToken = async (req, res, next) => {
+    const authHeader = req.headers["authorization"];
+    const token = authHeader && authHeader.split(" ")[1];
 
-const { MongoClient, ServerApiVersion } = require('mongodb');
+    if (!token) {
+        return res.status(401).json({ success: false, message: "No token provided." });
+    }
+
+    try {
+        const JWKS = createRemoteJWKSet(new URL(`${process.env.CLIENT_URL}/api/auth/jwks`));
+        const { payload } = await jwtVerify(token, JWKS, {
+            issuer: `${process.env.CLIENT_URL}`,
+            audience: `${process.env.CLIENT_URL}`,
+        });
+        req.user = payload;
+        next();
+    } catch (error) {
+        return res.status(403).json({ success: false, message: "Invalid or expired token." });
+    }
+};
+// ---------------------------------------------------------------
+
+const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
 const uri = process.env.MONGODB_URI;
 
-// Create a MongoClient with a MongoClientOptions object to set the Stable API version
 const client = new MongoClient(uri, {
   serverApi: {
     version: ServerApiVersion.v1,
@@ -31,218 +53,113 @@ const client = new MongoClient(uri, {
 
 async function run() {
     try {
-        // Connect the client to the server	(optional starting in v4.7)
+        
         // await client.connect();
+        // console.log("Connected to MongoDB successfully!");
         const db = client.db("doc-appoint-project-db");
-
-        // testing the dtaabase connection and insertion
-        const testCollection = db.collection("test");
         const appointmentsCollection = db.collection("appointments");
+        const usersCollection = db.collection("user");
+        const doctorsCollection = db.collection("doctors");
 
-        app.post('/api/bookings', async (req, res) => {
-        try {
-                const bookingData = req.body;
-                const result = await appointmentsCollection.insertOne(bookingData);
-                
-                console.log("New Appointment Saved to MongoDB:", result);
-                res.status(201).json({ 
-                success: true, 
-                message: "Appointment booked successfully!", 
-                result 
-                });
+        // ---------------- BOOKINGS ----------------------------------------------------------------------------
+        app.post('/api/bookings', authenticateToken, async (req, res) => {
+            try {
+                const result = await appointmentsCollection.insertOne(req.body);
+                res.status(201).json({ success: true, message: "Appointment booked successfully!", result });
             } catch (error) {
-                console.error("MongoDB Insertion Error:", error);
-                res.status(500).json({ 
-                success: false, 
-                message: "Failed to book appointment", 
-                error: error.message 
-                });
+                res.status(500).json({ success: false, message: "Failed to book appointment", error: error.message });
             }
         });
 
-        app.get('/api/bookings', async (req, res) => {
-        try {
-            const { email } = req.query; // email fetching 
-
-            let query = {};
-            if (email) {
-            query = { userEmail: email }; // email diye only shei dataset collect kora
+        app.get('/api/bookings', authenticateToken, async (req, res) => {
+            try {
+                const { email } = req.query;
+                const query = email ? { userEmail: email } : {};
+                const result = await appointmentsCollection.find(query).toArray();
+                res.status(200).json({ success: true, result });
+            } catch (error) {
+                res.status(500).json({ success: false, error: error.message });
             }
-
-            const result = await appointmentsCollection.find(query).toArray();
-            res.status(200).json({ success: true, result });
-        } catch (error) {
-            res.status(500).json({ success: false, error: error.message });
-        }
         });
 
-        app.patch('/api/bookings/:id', async (req, res) => {
-        try {
-            const { id } = req.params;
-            const { ObjectId } = require('mongodb');
-            const updatedData = req.body;
-
-            const query = { _id: new ObjectId(id) };
-            const updateDoc = {
-            $set: {
-                patientName: updatedData.patientName,
-                gender: updatedData.gender,
-                phone: updatedData.phone,
-                appointmentDate: updatedData.appointmentDate,
-                appointmentTime: updatedData.appointmentTime
-            }
-            };
-
-            const result = await appointmentsCollection.updateOne(query, updateDoc);
-            res.status(200).json({ success: true, message: "Appointment updated successfully!", result });
-        } catch (error) {
-            res.status(500).json({ success: false, error: error.message });
-        }
-        });
-
-    
-        app.delete('/api/bookings/:id', async (req, res) => {
-        try {
-            const { id } = req.params;
-            const { ObjectId } = require('mongodb'); // ObjectId import
-            
-            const result = await appointmentsCollection.deleteOne({ _id: new ObjectId(id) });
-            
-            if (result.deletedCount === 1) {
-            res.status(200).json({ success: true, message: "Appointment deleted successfully!" });
-            } else {
-            res.status(404).json({ success: false, message: "Appointment not found" });
-            }
-        } catch (error) {
-            res.status(500).json({ success: false, error: error.message });
-        }
-        });
-
-        // -------------------------------------------------------------------------------
-        const usersCollection = db.collection("user"); // Better-Auth users collection
-
-        app.patch('/api/users/update-profile', async (req, res) => {
-        try {
-            const { email, name, image } = req.body;
-
-            if (!email) {
-            return res.status(400).json({ success: false, message: "Email is required" });
-            }
-
-            const query = { email: email };
-            const updateDoc = {
-            $set: {
-                name: name,
-                image: image
-            }
-            };
-
-            const result = await usersCollection.updateOne(query, updateDoc);
-            res.status(200).json({ success: true, message: "Profile updated successfully!", result });
-        } catch (error) {
-            res.status(500).json({ success: false, error: error.message });
-        }
-        });
-
-        // Post API: Only triggers if the email matches the hardcoded admin address
-        app.post("/api/doctors/add", async (req, res) => {
-        try {
-            const { adminEmail, doctorData } = req.body;
-
-            // Strict security check for admin email restriction
-            if (adminEmail !== process.env.ADMIN_EMAIL) {
-            return res.status(403).json({ success: false, message: "Unauthorized access" });
-            }
-
-            // Insert into 'doctors' collection
-            const result = await db.collection("doctors").insertOne({
-            name: doctorData.name,
-            specialty: doctorData.specialty,
-            image: doctorData.image,
-            experience: doctorData.experience,
-            availability: doctorData.availability, // Expecting an array of slots
-            description: doctorData.description,
-            hospital: doctorData.hospital,
-            location: doctorData.location,
-            fee: Number(doctorData.fee)
-            });
-
-            res.status(201).json({ success: true, data: result });
-        } catch (err) {
-            res.status(500).json({ success: false, error: err.message });
-        }
-        });
-
-        // Get API: To fetch all dynamically added doctors for All Appointments page
-        app.get("/api/doctors", async (req, res) => {
-        try {
-            const { search } = req.query;
-            let query = {};
-
-            if (search) {
-            query = { name: { $regex: search, $options: "i" } };
-            }
-
-            const doctors = await db.collection("doctors").find(query).toArray();
-            res.status(200).json({ success: true, data: doctors });
-        } catch (err) {
-            res.status(500).json({ success: false, error: err.message });
-        }
-        });
-
-
-
-
-
-
-
-        // Get API: To fetch a single doctor's complete profile dataset by MongoDB ObjectId
-        app.get("/api/doctors/:id", async (req, res) => {
-        try {
-            const { id } = req.params;
-            const { ObjectId } = require('mongodb'); // Ensure ObjectId is available
-
-            // Input validation flag guard
-            if (!ObjectId.isValid(id)) {
-            return res.status(400).json({ success: false, message: "Invalid Doctor ID format" });
-            }
-
-            const doctor = await db.collection("doctors").findOne({ _id: new ObjectId(id) });
-
-            if (doctor) {
-            res.status(200).json({ success: true, data: doctor });
-            } else {
-            res.status(404).json({ success: false, message: "Doctor profile not found" });
-            }
-        } catch (err) {
-            console.error("Single Doctor Fetch Error:", err);
-            res.status(500).json({ success: false, error: err.message });
-        }
-        });
-
-
-        // -----------------------------------------------
-        // update korar proyojon hoyechilo
-        app.patch("/api/doctors/:id", async (req, res) => {
+        app.patch('/api/bookings/:id', authenticateToken, async (req, res) => {
             try {
                 const { id } = req.params;
-                const { ObjectId } = require('mongodb');
-                
-                // 
-                const result = await db.collection("doctors").updateOne(
-                    { _id: new ObjectId(id) },
+                const updateDoc = { $set: req.body };
+                const result = await appointmentsCollection.updateOne({ _id: new ObjectId(id) }, updateDoc);
+                res.status(200).json({ success: true, message: "Appointment updated!", result });
+            } catch (error) {
+                res.status(500).json({ success: false, error: error.message });
+            }
+        });
+
+        app.delete('/api/bookings/:id', authenticateToken, async (req, res) => {
+            try {
+                const { id } = req.params;
+                const result = await appointmentsCollection.deleteOne({ _id: new ObjectId(id) });
+                res.status(200).json({ success: true, message: "Deleted successfully!" });
+            } catch (error) {
+                res.status(500).json({ success: false, error: error.message });
+            }
+        });
+
+        // ---------------- USERS ---------------------------------------------------------------------------------
+        app.patch('/api/users/update-profile', authenticateToken, async (req, res) => {
+            try {
+                const { email, name, image } = req.body;
+                const result = await usersCollection.updateOne({ email }, { $set: { name, image } });
+                res.status(200).json({ success: true, message: "Profile updated!", result });
+            } catch (error) {
+                res.status(500).json({ success: false, error: error.message });
+            }
+        });
+
+        // ---------------- DOCTORS ----------------------------------------------------------------------------------
+        
+        app.post("/api/doctors/add", authenticateToken, async (req, res) => {
+            try {
+                const { adminEmail, doctorData } = req.body;
+                if (adminEmail !== process.env.ADMIN_EMAIL) {
+                    return res.status(403).json({ success: false, message: "Unauthorized access" });
+                }
+                const result = await doctorsCollection.insertOne(doctorData);
+                res.status(201).json({ success: true, data: result });
+            } catch (err) {
+                res.status(500).json({ success: false, error: err.message });
+            }
+        });
+
+        app.get("/api/doctors", async (req, res) => {
+            try {
+                const { search } = req.query;
+                const query = search ? { name: { $regex: search, $options: "i" } } : {};
+                const doctors = await doctorsCollection.find(query).toArray();
+                res.status(200).json({ success: true, data: doctors });
+            } catch (err) {
+                res.status(500).json({ success: false, error: err.message });
+            }
+        });
+
+        app.get("/api/doctors/:id", authenticateToken, async (req, res) => {
+            try {
+                const doctor = await doctorsCollection.findOne({ _id: new ObjectId(req.params.id) });
+                res.status(200).json({ success: true, data: doctor });
+            } catch (err) {
+                res.status(500).json({ success: false, error: err.message });
+            }
+        });
+
+        app.patch("/api/doctors/:id", authenticateToken, async (req, res) => {
+            try {
+                const result = await doctorsCollection.updateOne(
+                    { _id: new ObjectId(req.params.id) },
                     { $set: { experience: req.body.experience } }
                 );
-
                 res.status(200).json({ success: true, message: "Experience updated", result });
             } catch (err) {
                 res.status(500).json({ success: false, error: err.message });
             }
         });
-        // ------------------------------------------------
-        
-
-
 
         // Send a ping to confirm a successful connection
         // await client.db("admin").command({ ping: 1 });
@@ -252,16 +169,14 @@ async function run() {
         // await client.close();
     }
 }
+// ----------------------------------------------------------------------------------------
 run().catch(console.dir);
+//-----------------------------------------------------------------------------------------
 
-
-
-// Root route to verify server status
 app.get('/', (req, res) => {
-  res.send('Server is Running Smoothly!');
+    res.send('Server is Running Smoothly!');
 });
 
-// Start the Express server
 app.listen(PORT, () => {
-  console.log(`Server is running on http://localhost:${PORT}`);
+    console.log(`Server is running on http://localhost:${PORT}`);
 });
